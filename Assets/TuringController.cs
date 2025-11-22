@@ -182,49 +182,46 @@ public class TuringController : MonoBehaviour
     {
         reglas.Clear();
 
-        // --- REGLAS DE RESTA (Versión Corregida 3.0) ---
+        // --- REGLAS DE RESTA (Basadas en tu nueva tabla de la imagen) ---
+        // Mapeo: '-' en tu tabla es '0' aquí. 'h' es 'QH'.
 
-        // Q0: Ir al separador 
+        // Estado 0: Escanear el primer número hacia la derecha
         reglas[("Q0", "1")] = ("1", "Derecha", "Q0");
-        reglas[("Q0", "0")] = ("0", "Derecha", "Q1_BUSCAR"); // Va al separador y pasa a Q1_BUSCAR
-        reglas[("Q0", "_")] = ("_", "Stay", "QH");
+        reglas[("Q0", "0")] = ("0", "Derecha", "Q1"); // Encontró el separador '-'
 
-        // Q1_BUSCAR: (Reemplaza a Q1 de tu PDF )
-        // Este estado busca un '1' en B, omitiendo blancos
-        reglas[("Q1_BUSCAR", "1")] = ("_", "Izquierda", "Q2"); // ¡Encontró un 1! Bórralo y ve a Q2.
-        reglas[("Q1_BUSCAR", "_")] = ("_", "Derecha", "Q1_BUSCAR"); // Omite blancos, sigue buscando
+        // Estado 1: Buscar un '1' en el segundo número para marcarlo
+        reglas[("Q1", "1")] = ("x", "Izquierda", "Q2"); // Marca el 1 como x
+        reglas[("Q1", "_")] = ("_", "Izquierda", "Q5"); // Fin del segundo número, ir a limpiar
+        reglas[("Q1", "x")] = ("x", "Derecha", "Q1");   // Saltar las x
 
-        // ¡ESTA ES LA REGLA CLAVE QUE FALTABA!
-        // Si Q1_BUSCAR da la vuelta y encuentra el '0' de nuevo, B está vacío.
-        reglas[("Q1_BUSCAR", "0")] = ("0", "Izquierda", "Q5_LIMPIAR");
+        // Estado 2: Volver a la izquierda hacia el separador
+        reglas[("Q2", "0")] = ("0", "Izquierda", "Q3"); // Cruzó el separador hacia A
+        reglas[("Q2", "x")] = ("x", "Izquierda", "Q2"); // Saltar las x
 
-        // Q2: Retroceder al separador 
-        reglas[("Q2", "1")] = ("1", "Izquierda", "Q2");
-        reglas[("Q2", "0")] = ("0", "Izquierda", "Q3");
-        reglas[("Q2", "_")] = ("_", "Izquierda", "Q2"); // Omitir blancos
+        // Estado 3: Buscar un '1' en el primer número para tacharlo
+        reglas[("Q3", "1")] = ("x", "Derecha", "Q4");   // Marca el 1 de A como x
+        reglas[("Q3", "_")] = ("_", "Derecha", "Q7");   // Se acabaron los 1s en A (Resultado negativo/cero)
+        reglas[("Q3", "x")] = ("x", "Izquierda", "Q3"); // Saltar las x
 
-        // Q3: Borrar de la izquierda (A) 
-        reglas[("Q3", "1")] = ("_", "Derecha", "Q4");    // OK 
-        reglas[("Q3", "0")] = ("0", "Izquierda", "Q3");  // OK 
-        reglas[("Q3", "_")] = ("_", "Derecha", "Q6");    // OK: A se acabó (A < B) 
+        // Estado 4: Volver a la derecha hacia el separador
+        reglas[("Q4", "0")] = ("0", "Derecha", "Q1");   // Volver a Q1 para repetir el ciclo
+        reglas[("Q4", "x")] = ("x", "Derecha", "Q4");   // Saltar las x
 
-        // Q4: Avanzar al separador 
-        reglas[("Q4", "1")] = ("1", "Derecha", "Q4");
-        reglas[("Q4", "_")] = ("_", "Derecha", "Q4"); // Omitir blancos
-        reglas[("Q4", "0")] = ("0", "Derecha", "Q1_BUSCAR"); // Vuelve a Q1_BUSCAR para el prox. ciclo
+        // Estado 5: Limpieza (El segundo número se acabó)
+        reglas[("Q5", "0")] = ("_", "Izquierda", "Q6"); // Borra el separador '-'
+        reglas[("Q5", "x")] = ("_", "Izquierda", "Q5"); // Borra las x del lado derecho
 
-        // Q5_LIMPIAR (Reemplaza al Q5 de tu PDF )
-        // Se activa cuando A > B. Limpia el separador '0' y termina.
-        reglas[("Q5_LIMPIAR", "1")] = ("1", "Izquierda", "Q5_LIMPIAR"); // Moverse a la izq. hasta el '0'
-        reglas[("Q5_LIMPIAR", "_")] = ("_", "Izquierda", "Q5_LIMPIAR"); // Moverse a la izq. hasta el '0'
-        reglas[("Q5_LIMPIAR", "0")] = ("_", "Stay", "QH"); // Borrar el '0' y terminar
+        // Estado 6: Limpieza final del resultado
+        reglas[("Q6", "1")] = ("1", "Izquierda", "Q6"); // Deja los 1s del resultado quietos
+        reglas[("Q6", "_")] = ("_", "Derecha", "QH");   // HALT: Terminó la resta correctamente
+        reglas[("Q6", "x")] = ("_", "Izquierda", "Q6"); // Borra las x del lado izquierdo
 
-        // Q6: Borrar todo (A < B) 
-        reglas[("Q6", "1")] = ("_", "Derecha", "Q6");
-        reglas[("Q6", "0")] = ("_", "Derecha", "Q6");
-        reglas[("Q6", "_")] = ("_", "Stay", "QH"); // OK 
+        // Estado 7: Limpieza total (Caso cuando A < B)
+        reglas[("Q7", "1")] = ("_", "Derecha", "Q7");   // Borra todo lo que encuentre
+        reglas[("Q7", "0")] = ("_", "Derecha", "Q7");
+        reglas[("Q7", "_")] = ("_", "Izquierda", "QH"); // HALT: Resultado es vacío (0)
+        reglas[("Q7", "x")] = ("_", "Derecha", "Q7");
 
-        // --- MENSAJE DE CONFIRMACIÓN ---
-        Debug.Log("--- REGLAS DE RESTA (3.0) CARGADAS ---");
+        Debug.Log("--- REGLAS DE RESTA (Tabla Imagen) CARGADAS ---");
     }
 }
