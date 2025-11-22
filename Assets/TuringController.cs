@@ -1,28 +1,23 @@
 using System.Collections;
-using System.Collections.Generic; // ¡Importante! Esta línea es necesaria
+using System.Collections.Generic; // ï¿½Importante! Esta lï¿½nea es necesaria
 using UnityEngine;
 
 public class TuringController : MonoBehaviour
 {
-    // ----- Estas son las variables de nuestro "cerebro" -----
+    // AHORA: las hacemos pÃºblicas para poder leerlas desde otro script
+[HideInInspector] public List<string> cinta = new List<string>();
+[HideInInspector] public int posicionCabezal = 0;
+[HideInInspector] public string estadoActual = "Q0";
 
-    // 1. LA CINTA:
-    List<string> cinta = new List<string>();
 
-    // 2. EL CABEZAL:
-    int posicionCabezal = 0;
-
-    // 3. EL ESTADO:
-    string estadoActual = "Q0";
-
-    // 4. LA TABLA DE TRANSICIÓN (El Núcleo):
+    // 4. LA TABLA DE TRANSICIï¿½N (El Nï¿½cleo):
     Dictionary<(string, string), (string, string, string)> reglas = new Dictionary<(string, string), (string, string, string)>();
 
     // ----- Fin de las variables -----
 
 
     // Start() se ejecuta UNA VEZ cuando le das Play.
-    // Lo usaremos para configurar la máquina.
+    // Lo usaremos para configurar la mï¿½quina.
     void Start()
     {
         // Al empezar, no cargamos ninguna regla.
@@ -53,19 +48,19 @@ public class TuringController : MonoBehaviour
         }
     }
 
-    // ... aquí va tu función Step() ...
+    // ... aquï¿½ va tu funciï¿½n Step() ...
 
-    // ... aquí van tus CargarReglasSuma() y CargarReglasResta() ...
+    // ... aquï¿½ van tus CargarReglasSuma() y CargarReglasResta() ...
 
-    // ----- AÑADE ESTA NUEVA FUNCIÓN -----
-    // La usaremos para reiniciar la cinta fácilmente
+    // ----- Aï¿½ADE ESTA NUEVA FUNCIï¿½N -----
+    // La usaremos para reiniciar la cinta fï¿½cilmente
 
     void CargarCinta(string contenido)
     {
         // Limpiamos la cinta anterior
         cinta.Clear();
 
-        // Añadimos blancos al inicio
+        // Aï¿½adimos blancos al inicio
         cinta.Add("_");
         cinta.Add("_");
 
@@ -75,7 +70,7 @@ public class TuringController : MonoBehaviour
             cinta.Add(simbolo.ToString());
         }
 
-        // Añadimos blancos al final
+        // Aï¿½adimos blancos al final
         cinta.Add("_");
         cinta.Add("_");
 
@@ -91,31 +86,31 @@ public class TuringController : MonoBehaviour
     }
 
 
-    // ----- ESTA ES LA NUEVA FUNCIÓN (EL MOTOR) -----
+    // ----- ESTA ES LA NUEVA FUNCIï¿½N (EL MOTOR) -----
 
     void Step()
     {
         // 1. NO HACER NADA SI YA TERMINAMOS (Estado QH)
         if (estadoActual == "QH")
         {
-            Debug.Log("--- MÁQUINA DETENIDA (Estado QH) ---");
-            return; // Salir de la función
+            Debug.Log("--- Mï¿½QUINA DETENIDA (Estado QH) ---");
+            return; // Salir de la funciï¿½n
         }
 
-        // 2. LEER EL SÍMBOLO ACTUAL
+        // 2. LEER EL Sï¿½MBOLO ACTUAL
         string simboloLeido = cinta[posicionCabezal];
 
         // 3. BUSCAR LA REGLA EN NUESTRO DICCIONARIO
-        // Creamos la "llave" para buscar: (Estado Actual, Símbolo Leído)
+        // Creamos la "llave" para buscar: (Estado Actual, Sï¿½mbolo Leï¿½do)
         (string, string) llaveRegla = (estadoActual, simboloLeido);
 
-        // Verificamos si existe una regla para esta combinación
+        // Verificamos si existe una regla para esta combinaciï¿½n
         if (reglas.ContainsKey(llaveRegla))
         {
             // 4. OBTENER Y APLICAR LA REGLA
             (string escribir, string mover, string nuevoEstado) accion = reglas[llaveRegla];
 
-            // 4a. Escribir el nuevo símbolo en la cinta
+            // 4a. Escribir el nuevo sï¿½mbolo en la cinta
             cinta[posicionCabezal] = accion.escribir;
 
             // 4b. Mover el cabezal
@@ -123,7 +118,7 @@ public class TuringController : MonoBehaviour
             {
                 posicionCabezal++;
                 // --- Seguridad de la cinta ---
-                // Si nos salimos por la derecha, añadimos un nuevo "blanco"
+                // Si nos salimos por la derecha, aï¿½adimos un nuevo "blanco"
                 if (posicionCabezal >= cinta.Count)
                 {
                     cinta.Add("_");
@@ -133,11 +128,11 @@ public class TuringController : MonoBehaviour
             {
                 posicionCabezal--;
                 // --- Seguridad de la cinta ---
-                // Si nos salimos por la izquierda, añadimos un "blanco" al inicio
+                // Si nos salimos por la izquierda, aï¿½adimos un "blanco" al inicio
                 if (posicionCabezal < 0)
                 {
                     cinta.Insert(0, "_");
-                    posicionCabezal = 0; // Reajustamos la posición a 0
+                    posicionCabezal = 0; // Reajustamos la posiciï¿½n a 0
                 }
             }
             // (Si es "Stay", no hacemos nada)
@@ -154,13 +149,13 @@ public class TuringController : MonoBehaviour
         }
         else
         {
-            // No se encontró una regla para (estado, símbolo)
-            // Esto es un error o el fin de la computación
+            // No se encontrï¿½ una regla para (estado, sï¿½mbolo)
+            // Esto es un error o el fin de la computaciï¿½n
             Debug.LogError("ERROR: No existe regla para (" + estadoActual + ", " + simboloLeido + ")");
-            estadoActual = "QH"; // Forzar detención
+            estadoActual = "QH"; // Forzar detenciï¿½n
         }
     }
-    // ... aquí termina tu función Step() ...
+    // ... aquï¿½ termina tu funciï¿½n Step() ...
 
     void CargarReglasSuma()
     {
@@ -182,7 +177,7 @@ public class TuringController : MonoBehaviour
     {
         reglas.Clear();
 
-        // --- REGLAS DE RESTA (Versión Corregida 3.0) ---
+        // --- REGLAS DE RESTA (Versiï¿½n Corregida 3.0) ---
 
         // Q0: Ir al separador 
         reglas[("Q0", "1")] = ("1", "Derecha", "Q0");
@@ -191,11 +186,11 @@ public class TuringController : MonoBehaviour
 
         // Q1_BUSCAR: (Reemplaza a Q1 de tu PDF )
         // Este estado busca un '1' en B, omitiendo blancos
-        reglas[("Q1_BUSCAR", "1")] = ("_", "Izquierda", "Q2"); // ¡Encontró un 1! Bórralo y ve a Q2.
+        reglas[("Q1_BUSCAR", "1")] = ("_", "Izquierda", "Q2"); // ï¿½Encontrï¿½ un 1! Bï¿½rralo y ve a Q2.
         reglas[("Q1_BUSCAR", "_")] = ("_", "Derecha", "Q1_BUSCAR"); // Omite blancos, sigue buscando
 
-        // ¡ESTA ES LA REGLA CLAVE QUE FALTABA!
-        // Si Q1_BUSCAR da la vuelta y encuentra el '0' de nuevo, B está vacío.
+        // ï¿½ESTA ES LA REGLA CLAVE QUE FALTABA!
+        // Si Q1_BUSCAR da la vuelta y encuentra el '0' de nuevo, B estï¿½ vacï¿½o.
         reglas[("Q1_BUSCAR", "0")] = ("0", "Izquierda", "Q5_LIMPIAR");
 
         // Q2: Retroceder al separador 
@@ -206,7 +201,7 @@ public class TuringController : MonoBehaviour
         // Q3: Borrar de la izquierda (A) 
         reglas[("Q3", "1")] = ("_", "Derecha", "Q4");    // OK 
         reglas[("Q3", "0")] = ("0", "Izquierda", "Q3");  // OK 
-        reglas[("Q3", "_")] = ("_", "Derecha", "Q6");    // OK: A se acabó (A < B) 
+        reglas[("Q3", "_")] = ("_", "Derecha", "Q6");    // OK: A se acabï¿½ (A < B) 
 
         // Q4: Avanzar al separador 
         reglas[("Q4", "1")] = ("1", "Derecha", "Q4");
@@ -224,7 +219,7 @@ public class TuringController : MonoBehaviour
         reglas[("Q6", "0")] = ("_", "Derecha", "Q6");
         reglas[("Q6", "_")] = ("_", "Stay", "QH"); // OK 
 
-        // --- MENSAJE DE CONFIRMACIÓN ---
+        // --- MENSAJE DE CONFIRMACIï¿½N ---
         Debug.Log("--- REGLAS DE RESTA (3.0) CARGADAS ---");
     }
 }
