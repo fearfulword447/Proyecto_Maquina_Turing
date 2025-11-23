@@ -16,11 +16,11 @@ public class TuringController : MonoBehaviour
     [Header("Cintas por defecto (unario)")]
     [SerializeField] private string cintaSumaPorDefecto = "111011";  // 3 + 2
     [SerializeField] private string cintaRestaPorDefecto = "1111011"; // 4 - 3
-    [SerializeField, Range(1, 64)] private int longitudCintaLimpia = 21;
+    [SerializeField, Range(22, 64)] private int longitudCintaLimpia = 22;
 
     private Coroutine autoRunCoroutine;
 
-    private int LongitudObjetivo => Mathf.Max(longitudCintaLimpia, 5);
+    private int LongitudObjetivo => Mathf.Max(longitudCintaLimpia, 22);
     private int PrimerEditableIndex => LongitudObjetivo > 2 ? 1 : 0;
     private int UltimoEditableIndex => LongitudObjetivo > 2 ? LongitudObjetivo - 3 : PrimerEditableIndex;
 
