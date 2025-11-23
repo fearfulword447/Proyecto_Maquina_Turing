@@ -1,225 +1,370 @@
 using System.Collections;
-using System.Collections.Generic; // �Importante! Esta l�nea es necesaria
+using System.Collections.Generic;
 using UnityEngine;
 
 public class TuringController : MonoBehaviour
 {
-    // AHORA: las hacemos públicas para poder leerlas desde otro script
-[HideInInspector] public List<string> cinta = new List<string>();
-[HideInInspector] public int posicionCabezal = 0;
-[HideInInspector] public string estadoActual = "Q0";
+    [Header("Estado de la máquina")]
+    [HideInInspector] public List<string> cinta = new List<string>();
+    [HideInInspector] public int posicionCabezal = 0;
+    [HideInInspector] public string estadoActual = "Q0";
 
+    [Header("Control automático")]
+    [SerializeField, Range(0.05f, 2f)] private float autoRunDelay = 0.5f;
+    [SerializeField, Range(1, 9)] private int maxOperandValue = 9;
 
-    // 4. LA TABLA DE TRANSICI�N (El N�cleo):
-    Dictionary<(string, string), (string, string, string)> reglas = new Dictionary<(string, string), (string, string, string)>();
+    [Header("Cintas por defecto (unario)")]
+    [SerializeField] private string cintaSumaPorDefecto = "111011";  // 3 + 2
+    [SerializeField] private string cintaRestaPorDefecto = "1111011"; // 4 - 3
+    [SerializeField, Range(1, 64)] private int longitudCintaLimpia = 21;
 
-    // ----- Fin de las variables -----
+    private Coroutine autoRunCoroutine;
 
+    private int LongitudObjetivo => Mathf.Max(longitudCintaLimpia, 5);
+    private int PrimerEditableIndex => LongitudObjetivo > 2 ? 1 : 0;
+    private int UltimoEditableIndex => LongitudObjetivo > 2 ? LongitudObjetivo - 3 : PrimerEditableIndex;
 
-    // Start() se ejecuta UNA VEZ cuando le das Play.
-    // Lo usaremos para configurar la m�quina.
+    // Diccionario de reglas
+    private readonly Dictionary<(string estado, string simbolo), (string escribir, string mover, string nuevoEstado)> reglas
+        = new Dictionary<(string, string), (string, string, string)>();
+
+    public int MaxOperandValue => maxOperandValue;
+    public bool EstaCorriendoAutomatico => autoRunCoroutine != null;
+
+    // ---------------------------------------------------------------------
     void Start()
     {
-        // Al empezar, no cargamos ninguna regla.
-        // Carga una cinta de ejemplo para 3 - 2 (111011)
-        CargarCinta("111011");
+        // Arranca sin cinta cargada, solo las reglas de resta por defecto
+        CargarReglasResta();
+        estadoActual = "Q0";
     }
 
     void Update()
     {
-        // Presiona Espacio para ejecutar un paso
         if (Input.GetKeyDown(KeyCode.Space))
-        {
             Step();
-        }
 
-        // Presiona "S" para cargar la SUMA
         if (Input.GetKeyDown(KeyCode.S))
-        {
-            CargarReglasSuma();
-            CargarCinta("1101"); // Carga 2+1
-        }
+            CargarProgramaSuma();
 
-        // Presiona "R" para cargar la RESTA
         if (Input.GetKeyDown(KeyCode.R))
+            CargarProgramaResta();
+
+        if (Input.GetKeyDown(KeyCode.A))
         {
-            CargarReglasResta();
-            CargarCinta("111011"); // Carga 3-2
+            if (EstaCorriendoAutomatico) StopAutoRun();
+            else StartAutoRun();
         }
     }
 
-    // ... aqu� va tu funci�n Step() ...
-
-    // ... aqu� van tus CargarReglasSuma() y CargarReglasResta() ...
-
-    // ----- A�ADE ESTA NUEVA FUNCI�N -----
-    // La usaremos para reiniciar la cinta f�cilmente
-
-    void CargarCinta(string contenido)
+    // ---------------------------------------------------------------------
+    // Configuración general
+    // ---------------------------------------------------------------------
+    public void SetAutoRunDelay(float segundos)
     {
-        // Limpiamos la cinta anterior
-        cinta.Clear();
+        autoRunDelay = Mathf.Clamp(segundos, 0.05f, 2f);
+    }
 
-        // A�adimos blancos al inicio
-        cinta.Add("_");
-        cinta.Add("_");
+    // ---------------------------------------------------------------------
+    // PROGRAMAS
+    // ---------------------------------------------------------------------
+    public void CargarProgramaSuma()
+    {
+        StopAutoRun();
+        CargarReglasSuma();
+        estadoActual = "Q0";
+        EnsureTapeInitialized();
+        Debug.Log("Reglas de SUMA cargadas. Usa los botones de cinta para preparar la entrada.");
+    }
 
-        // Cargamos el contenido (ej: "111011")
+    public void CargarProgramaResta()
+    {
+        StopAutoRun();
+        CargarReglasResta();
+        estadoActual = "Q0";
+        EnsureTapeInitialized();
+        Debug.Log("Reglas de RESTA cargadas. Usa los botones de cinta para preparar la entrada.");
+    }
+
+    // ---------------------------------------------------------------------
+    // EJEMPLOS
+    // ---------------------------------------------------------------------
+    public void CargarEjemploSuma()
+    {
+        StopAutoRun();
+        CargarReglasSuma();
+        CargarCinta(cintaSumaPorDefecto);
+        Debug.Log("Ejemplo de SUMA cargado.");
+    }
+
+    public void CargarEjemploResta()
+    {
+        StopAutoRun();
+        CargarReglasResta();
+        CargarCinta(cintaRestaPorDefecto);
+        Debug.Log("Ejemplo de RESTA cargado.");
+    }
+
+    // ---------------------------------------------------------------------
+    // CARGA DE CINTA Y OPERANDOS
+    // ---------------------------------------------------------------------
+    public void CargarOperandos(int operandoA, int operandoB)
+    {
+        int a = Mathf.Clamp(operandoA, 0, maxOperandValue);
+        int b = Mathf.Clamp(operandoB, 0, maxOperandValue);
+
+        StopAutoRun();
+
+        string contenido = new string('1', a) + "0" + new string('1', b);
+        CargarCinta(contenido);
+    }
+
+    public void CargarCinta(string contenido)
+    {
+        LimpiarCinta();
+
+        int indice = PrimerEditableIndex;
         foreach (char simbolo in contenido)
         {
-            cinta.Add(simbolo.ToString());
+            if (indice > UltimoEditableIndex)
+                break;
+
+            if (simbolo == '1' || simbolo == '0' || simbolo == '_')
+            {
+                cinta[indice] = simbolo.ToString();
+                indice++;
+            }
         }
 
-        // A�adimos blancos al final
-        cinta.Add("_");
-        cinta.Add("_");
-
-        // Reiniciamos el cabezal y el estado
-        posicionCabezal = 2; // Inicia en el primer '1'
+        posicionCabezal = PrimerEditableIndex;
         estadoActual = "Q0";
 
-        // Imprimir estado inicial
-        Debug.Log("--- CINTA CARGADA (" + contenido + ") ---");
+        Debug.Log($"--- CINTA CARGADA ({contenido}) ---");
         Debug.Log(string.Join(" ", cinta));
-        Debug.Log("Cabezal en: " + posicionCabezal + " (leyendo '" + cinta[posicionCabezal] + "')");
-        Debug.Log("Estado actual: " + estadoActual);
     }
 
-
-    // ----- ESTA ES LA NUEVA FUNCI�N (EL MOTOR) -----
-
-    void Step()
+    // ---------------------------------------------------------------------
+    // AUTO RUN
+    // ---------------------------------------------------------------------
+    public void StartAutoRun()
     {
-        // 1. NO HACER NADA SI YA TERMINAMOS (Estado QH)
+        if (EstaCorriendoAutomatico) return;
         if (estadoActual == "QH")
         {
-            Debug.Log("--- M�QUINA DETENIDA (Estado QH) ---");
-            return; // Salir de la funci�n
+            Debug.LogWarning("Máquina detenida en QH. Carga una cinta nueva.");
+            return;
         }
+        autoRunCoroutine = StartCoroutine(AutoRunLoop());
+    }
 
-        // 2. LEER EL S�MBOLO ACTUAL
-        string simboloLeido = cinta[posicionCabezal];
+    public void StopAutoRun()
+    {
+        if (autoRunCoroutine == null) return;
+        StopCoroutine(autoRunCoroutine);
+        autoRunCoroutine = null;
+    }
 
-        // 3. BUSCAR LA REGLA EN NUESTRO DICCIONARIO
-        // Creamos la "llave" para buscar: (Estado Actual, S�mbolo Le�do)
-        (string, string) llaveRegla = (estadoActual, simboloLeido);
-
-        // Verificamos si existe una regla para esta combinaci�n
-        if (reglas.ContainsKey(llaveRegla))
+    private IEnumerator AutoRunLoop()
+    {
+        while (true)
         {
-            // 4. OBTENER Y APLICAR LA REGLA
-            (string escribir, string mover, string nuevoEstado) accion = reglas[llaveRegla];
-
-            // 4a. Escribir el nuevo s�mbolo en la cinta
-            cinta[posicionCabezal] = accion.escribir;
-
-            // 4b. Mover el cabezal
-            if (accion.mover == "Derecha")
+            Step();
+            if (estadoActual == "QH")
             {
-                posicionCabezal++;
-                // --- Seguridad de la cinta ---
-                // Si nos salimos por la derecha, a�adimos un nuevo "blanco"
-                if (posicionCabezal >= cinta.Count)
-                {
-                    cinta.Add("_");
-                }
+                autoRunCoroutine = null;
+                yield break;
             }
-            else if (accion.mover == "Izquierda")
-            {
-                posicionCabezal--;
-                // --- Seguridad de la cinta ---
-                // Si nos salimos por la izquierda, a�adimos un "blanco" al inicio
-                if (posicionCabezal < 0)
-                {
-                    cinta.Insert(0, "_");
-                    posicionCabezal = 0; // Reajustamos la posici�n a 0
-                }
-            }
-            // (Si es "Stay", no hacemos nada)
-
-            // 4c. Actualizar al nuevo estado
-            estadoActual = accion.nuevoEstado;
-
-            // 5. IMPRIMIR EL NUEVO ESTADO (para depurar)
-            Debug.Log("---------------------------------");
-            Debug.Log("Paso ejecutado. Nuevo estado:");
-            Debug.Log(string.Join(" ", cinta));
-            Debug.Log("Cabezal en: " + posicionCabezal + " (leyendo '" + cinta[posicionCabezal] + "')");
-            Debug.Log("Estado actual: " + estadoActual);
-        }
-        else
-        {
-            // No se encontr� una regla para (estado, s�mbolo)
-            // Esto es un error o el fin de la computaci�n
-            Debug.LogError("ERROR: No existe regla para (" + estadoActual + ", " + simboloLeido + ")");
-            estadoActual = "QH"; // Forzar detenci�n
+            yield return new WaitForSeconds(autoRunDelay);
         }
     }
-    // ... aqu� termina tu funci�n Step() ...
 
-    void CargarReglasSuma()
+    // ---------------------------------------------------------------------
+    // PASO A PASO
+    // ---------------------------------------------------------------------
+    public void Step()
     {
-        // Limpiamos las reglas anteriores
+        EnsureTapeInitialized();
+
+        if (estadoActual == "QH") return;
+
+        if (posicionCabezal < 0) posicionCabezal = 0;
+        if (posicionCabezal >= cinta.Count) posicionCabezal = cinta.Count - 1;
+
+        string simboloLeido = cinta[posicionCabezal];
+        var llave = (estadoActual, simboloLeido);
+
+        if (!reglas.TryGetValue(llave, out var accion))
+        {
+            Debug.LogError($"ERROR: No existe regla para ({estadoActual}, {simboloLeido})");
+            estadoActual = "QH";
+            StopAutoRun();
+            return;
+        }
+
+        cinta[posicionCabezal] = accion.escribir;
+
+        switch (accion.mover)
+        {
+            case "Derecha":
+                posicionCabezal++;
+                if (posicionCabezal >= cinta.Count)
+                    posicionCabezal = cinta.Count - 1;
+                break;
+
+            case "Izquierda":
+                posicionCabezal--;
+                if (posicionCabezal < 0)
+                    posicionCabezal = 0;
+                break;
+        }
+
+        estadoActual = accion.nuevoEstado;
+        Debug.Log($"Paso ejecutado: {estadoActual}");
+    }
+
+    public void MoverCabezalIzquierda()
+    {
+        StopAutoRun();
+        EnsureTapeInitialized();
+
+        posicionCabezal = Mathf.Max(PrimerEditableIndex, posicionCabezal - 1);
+
+        Debug.Log($"Cabezal movido manualmente a la izquierda. Posicion: {posicionCabezal}");
+    }
+
+    public void MoverCabezalDerecha()
+    {
+        StopAutoRun();
+        EnsureTapeInitialized();
+
+        posicionCabezal = Mathf.Min(UltimoEditableIndex, posicionCabezal + 1);
+
+        Debug.Log($"Cabezal movido manualmente a la derecha. Posicion: {posicionCabezal}");
+    }
+
+    public void CiclarSimboloActual()
+    {
+        StopAutoRun();
+        EnsureTapeInitialized();
+
+        if (!EsIndiceEditable(posicionCabezal))
+        {
+            Debug.LogWarning("No se puede escribir en esta celda. Usa solo las 18 centrales.");
+            return;
+        }
+
+        string actual = cinta[posicionCabezal];
+        string siguiente = actual == "1" ? "0" : actual == "0" ? "_" : "1";
+        cinta[posicionCabezal] = siguiente;
+
+        Debug.Log($"Celda {posicionCabezal} ahora contiene '{siguiente}'.");
+    }
+
+    public void ReiniciarDesdeInicio()
+    {
+        StopAutoRun();
+        EnsureTapeInitialized();
+        posicionCabezal = PrimerEditableIndex;
+        estadoActual = "Q0";
+        Debug.Log("Cabezal y estado reiniciados al inicio.");
+    }
+
+    public void LimpiarCinta()
+    {
+        StopAutoRun();
+        cinta.Clear();
+
+        int longitud = LongitudObjetivo;
+        for (int i = 0; i < longitud; i++)
+            cinta.Add("_");
+
+        posicionCabezal = PrimerEditableIndex;
+        estadoActual = "Q0";
+        Debug.Log($"Cinta limpiada con {longitud} celdas en blanco.");
+    }
+
+    void EnsureTapeInitialized()
+    {
+        if (cinta.Count == 0)
+        {
+            LimpiarCinta();
+            return;
+        }
+
+        int longitud = LongitudObjetivo;
+
+        while (cinta.Count < longitud)
+            cinta.Add("_");
+
+        if (cinta.Count > longitud)
+            cinta.RemoveRange(longitud, cinta.Count - longitud);
+
+        if (cinta.Count > 0) cinta[0] = "_";
+        if (cinta.Count > 1) cinta[cinta.Count - 1] = "_";
+        if (cinta.Count > 2) cinta[cinta.Count - 2] = "_";
+
+        posicionCabezal = Mathf.Clamp(posicionCabezal, 0, cinta.Count - 1);
+    }
+
+    bool EsIndiceEditable(int index)
+    {
+        return index >= PrimerEditableIndex && index <= UltimoEditableIndex;
+    }
+
+    // ---------------------------------------------------------------------
+    // REGLAS DE SUMA
+    // ---------------------------------------------------------------------
+    public void CargarReglasSuma()
+    {
         reglas.Clear();
 
-        // --- REGLAS DE SUMA (Tu tabla ) ---
         reglas[("Q0", "1")] = ("1", "Derecha", "Q0");
         reglas[("Q0", "0")] = ("1", "Derecha", "Q1");
         reglas[("Q0", "_")] = ("_", "Stay", "QH");
+
         reglas[("Q1", "1")] = ("1", "Derecha", "Q1");
         reglas[("Q1", "_")] = ("_", "Izquierda", "Q2");
+
         reglas[("Q2", "1")] = ("_", "Stay", "QH");
 
-        Debug.Log("--- REGLAS DE SUMA CARGADAS ---");
+        Debug.Log("Reglas de SUMA cargadas.");
     }
 
-    void CargarReglasResta()
+    // ---------------------------------------------------------------------
+    // REGLAS DE RESTA
+    // ---------------------------------------------------------------------
+    public void CargarReglasResta()
     {
         reglas.Clear();
 
-        // --- REGLAS DE RESTA (Versi�n Corregida 3.0) ---
-
-        // Q0: Ir al separador 
         reglas[("Q0", "1")] = ("1", "Derecha", "Q0");
-        reglas[("Q0", "0")] = ("0", "Derecha", "Q1_BUSCAR"); // Va al separador y pasa a Q1_BUSCAR
+        reglas[("Q0", "0")] = ("0", "Derecha", "Q1_BUSCAR");
         reglas[("Q0", "_")] = ("_", "Stay", "QH");
 
-        // Q1_BUSCAR: (Reemplaza a Q1 de tu PDF )
-        // Este estado busca un '1' en B, omitiendo blancos
-        reglas[("Q1_BUSCAR", "1")] = ("_", "Izquierda", "Q2"); // �Encontr� un 1! B�rralo y ve a Q2.
-        reglas[("Q1_BUSCAR", "_")] = ("_", "Derecha", "Q1_BUSCAR"); // Omite blancos, sigue buscando
-
-        // �ESTA ES LA REGLA CLAVE QUE FALTABA!
-        // Si Q1_BUSCAR da la vuelta y encuentra el '0' de nuevo, B est� vac�o.
+        reglas[("Q1_BUSCAR", "1")] = ("_", "Izquierda", "Q2");
+        reglas[("Q1_BUSCAR", "_")] = ("_", "Derecha", "Q1_BUSCAR");
         reglas[("Q1_BUSCAR", "0")] = ("0", "Izquierda", "Q5_LIMPIAR");
 
-        // Q2: Retroceder al separador 
         reglas[("Q2", "1")] = ("1", "Izquierda", "Q2");
+        reglas[("Q2", "_")] = ("_", "Izquierda", "Q2");
         reglas[("Q2", "0")] = ("0", "Izquierda", "Q3");
-        reglas[("Q2", "_")] = ("_", "Izquierda", "Q2"); // Omitir blancos
 
-        // Q3: Borrar de la izquierda (A) 
-        reglas[("Q3", "1")] = ("_", "Derecha", "Q4");    // OK 
-        reglas[("Q3", "0")] = ("0", "Izquierda", "Q3");  // OK 
-        reglas[("Q3", "_")] = ("_", "Derecha", "Q6");    // OK: A se acab� (A < B) 
+        reglas[("Q3", "1")] = ("_", "Derecha", "Q4");
+        reglas[("Q3", "0")] = ("0", "Izquierda", "Q3");
+        reglas[("Q3", "_")] = ("_", "Derecha", "Q6");
 
-        // Q4: Avanzar al separador 
         reglas[("Q4", "1")] = ("1", "Derecha", "Q4");
-        reglas[("Q4", "_")] = ("_", "Derecha", "Q4"); // Omitir blancos
-        reglas[("Q4", "0")] = ("0", "Derecha", "Q1_BUSCAR"); // Vuelve a Q1_BUSCAR para el prox. ciclo
+        reglas[("Q4", "_")] = ("_", "Derecha", "Q4");
+        reglas[("Q4", "0")] = ("0", "Derecha", "Q1_BUSCAR");
 
-        // Q5_LIMPIAR (Reemplaza al Q5 de tu PDF )
-        // Se activa cuando A > B. Limpia el separador '0' y termina.
-        reglas[("Q5_LIMPIAR", "1")] = ("1", "Izquierda", "Q5_LIMPIAR"); // Moverse a la izq. hasta el '0'
-        reglas[("Q5_LIMPIAR", "_")] = ("_", "Izquierda", "Q5_LIMPIAR"); // Moverse a la izq. hasta el '0'
-        reglas[("Q5_LIMPIAR", "0")] = ("_", "Stay", "QH"); // Borrar el '0' y terminar
+        reglas[("Q5_LIMPIAR", "1")] = ("1", "Izquierda", "Q5_LIMPIAR");
+        reglas[("Q5_LIMPIAR", "_")] = ("_", "Izquierda", "Q5_LIMPIAR");
+        reglas[("Q5_LIMPIAR", "0")] = ("_", "Stay", "QH");
 
-        // Q6: Borrar todo (A < B) 
         reglas[("Q6", "1")] = ("_", "Derecha", "Q6");
         reglas[("Q6", "0")] = ("_", "Derecha", "Q6");
-        reglas[("Q6", "_")] = ("_", "Stay", "QH"); // OK 
+        reglas[("Q6", "_")] = ("_", "Stay", "QH");
 
-        // --- MENSAJE DE CONFIRMACI�N ---
-        Debug.Log("--- REGLAS DE RESTA (3.0) CARGADAS ---");
+        Debug.Log("Reglas de RESTA cargadas.");
     }
 }

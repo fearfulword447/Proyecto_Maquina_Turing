@@ -5,100 +5,224 @@ using TMPro;
 public class TuringVisualizer3D : MonoBehaviour
 {
     [Header("Referencias")]
-    public TuringController controller;   // Tu script lógico
-    public GameObject cellPrefab;         // Prefab del cubo de la cinta
-    public Transform headObject;          // Esfera que muestra el cabezal
+    public TuringController controller;   // Script lógico
+    public GameObject cellPrefab;         // Prefab del "LED"
+    public Transform headObject;          // Esfera/cabezal
 
-    [Header("Cinta visible")]
-    public int cellsToShow = 16;          // Cuántas celdas se ven
-    public float cellSpacing = 1.1f;      // Distancia entre cubos
+    [Header("Anclajes de la cinta")]
+    public Transform inicioCinta;         // Punto izquierdo del riel
+    public Transform finCinta;            // Punto derecho del riel
 
-    private List<GameObject> cellInstances = new List<GameObject>();
-    private int offset = 0;               // Índice en la cinta para la celda más a la izquierda
+    [Header("Cinta visible (21 LEDs fijos)")]
+    [SerializeField] private int cellsToShow = 21; // No tocar en el inspector
+
+    [Header("Celdas existentes (opcional)")]
+    [SerializeField] private bool usarCeldasPrecolocadas = false;
+    [SerializeField] private Transform contenedorCeldas;
+
+    [Header("Animación del cabezal")]
+    public float headHeight = 0.6f;
+    public Vector3 headOffset = Vector3.zero;
+    public bool snapHeadToCell = true;
+    public bool usarNormalDeCelda = true;
+    public float headMoveSpeed = 5f;
+
+    [Header("Colores de las celdas")]
+    public Color blankColor = Color.white;
+    public Color oneColor   = new Color(1f, 1f, 0.2f);    // 1 = amarillo
+    public Color zeroColor  = new Color(0.8f, 0.8f, 0.8f); // 0 = gris
+
+    [Header("Opciones visuales")]
+    public bool mostrarSimboloEnTexto = false;
+    public bool resaltarCeldaActual   = false;
+    [Range(0f, 2f)]
+    public float emisionCeldaActual   = 0.8f;
+
+    private readonly List<GameObject> cellInstances = new List<GameObject>();
+    private bool celdasInstanciadas = false;
+    private Vector3 headTargetPos;
+
+    // -------------------------------------------------------------
+    void Awake()
+    {
+        if (controller == null)
+            controller = GetComponent<TuringController>();
+    }
 
     void Start()
     {
-        // Si no arrastras el controller a mano, intenta buscarlo en el mismo objeto
-        if (controller == null)
-        {
-            controller = GetComponent<TuringController>();
-        }
+        // Nos aseguramos que siempre haya 21
+        cellsToShow = 21;
 
-        // Creamos los cubos una vez
         CreateCells();
-        UpdateCells();
+        ForceHeadPosition();
     }
 
     void Update()
     {
-        if (controller == null || controller.cinta == null || controller.cinta.Count == 0)
+        if (controller == null)
             return;
 
-        // Centramos la vista alrededor del cabezal
-        offset = controller.posicionCabezal - cellsToShow / 2;
-
         UpdateCells();
+        UpdateHead();
     }
 
+    // -------------------------------------------------------------
     void CreateCells()
     {
-        // Limpia si ya había algo
-        foreach (var go in cellInstances)
-        {
-            if (go != null) Destroy(go);
-        }
+        LimpiarCeldasInstanciadas();
         cellInstances.Clear();
 
+        if (usarCeldasPrecolocadas && contenedorCeldas != null)
+        {
+            foreach (Transform child in contenedorCeldas)
+            {
+                if (child == contenedorCeldas) continue;
+                cellInstances.Add(child.gameObject);
+            }
+
+            if (cellInstances.Count == 0)
+            {
+                Debug.LogWarning("TuringVisualizer3D: el contenedor de celdas no tiene hijos. Se usara el modo instanciado.");
+            }
+            else
+            {
+                cellsToShow = cellInstances.Count;
+                celdasInstanciadas = false;
+                return;
+            }
+        }
+
+        if (inicioCinta == null || finCinta == null)
+        {
+            Debug.LogError("TuringVisualizer3D: falta asignar 'inicioCinta' o 'finCinta' en el inspector.");
+            return;
+        }
+
+        // Crear 21 celdas perfectamente repartidas entre inicioCinta y finCinta
         for (int i = 0; i < cellsToShow; i++)
         {
-            Vector3 pos = new Vector3(i * cellSpacing, 0, 0);
+            float t = (cellsToShow == 1) ? 0f : (float)i / (cellsToShow - 1);
+            Vector3 pos = Vector3.Lerp(inicioCinta.position, finCinta.position, t);
+
             GameObject cell = Instantiate(cellPrefab, pos, Quaternion.identity, transform);
             cell.name = "Cell_" + i;
             cellInstances.Add(cell);
         }
+
+        celdasInstanciadas = true;
     }
 
+    void LimpiarCeldasInstanciadas()
+    {
+        if (!celdasInstanciadas)
+            return;
+
+        foreach (var go in cellInstances)
+        {
+            if (go != null)
+                Destroy(go);
+        }
+
+        celdasInstanciadas = false;
+    }
+
+    // -------------------------------------------------------------
     void UpdateCells()
     {
-        for (int i = 0; i < cellsToShow; i++)
+        if (controller.cinta == null || cellInstances.Count == 0)
+            return;
+
+        for (int localIndex = 0; localIndex < cellInstances.Count; localIndex++)
         {
-            int tapeIndex = offset + i;
+            GameObject go = cellInstances[localIndex];
+            if (go == null) continue;
+
+            int tapeIndex = localIndex; // 0..20 => 21 celdas físicas
+
             string symbol = "_";
-
             if (tapeIndex >= 0 && tapeIndex < controller.cinta.Count)
-            {
                 symbol = controller.cinta[tapeIndex];
-            }
 
-            GameObject cell = cellInstances[i];
-
-            // Cambiar el texto
-            TextMeshPro tmp = cell.GetComponentInChildren<TextMeshPro>();
+            // Texto opcional dentro del LED
+            var tmp = go.GetComponentInChildren<TextMeshPro>();
             if (tmp != null)
-            {
-                tmp.text = symbol;
-            }
+                tmp.text = mostrarSimboloEnTexto ? symbol : "";
 
-            // Resaltar la celda donde está el cabezal
-            Renderer r = cell.GetComponent<Renderer>();
-            if (r != null)
+            // Color según símbolo
+            Color baseColor = blankColor;
+            if (symbol == "1")      baseColor = oneColor;
+            else if (symbol == "0") baseColor = zeroColor;
+
+            var rend = go.GetComponent<Renderer>();
+            if (rend != null)
             {
-                if (tapeIndex == controller.posicionCabezal)
-                    r.material.color = Color.yellow;
+                rend.material.color = baseColor;
+
+                if (resaltarCeldaActual && tapeIndex == controller.posicionCabezal)
+                {
+                    rend.material.EnableKeyword("_EMISSION");
+                    rend.material.SetColor("_EmissionColor", baseColor * emisionCeldaActual);
+                }
                 else
-                    r.material.color = Color.white;
+                {
+                    rend.material.DisableKeyword("_EMISSION");
+                }
             }
+        }
+    }
+
+    // -------------------------------------------------------------
+    void ForceHeadPosition()
+    {
+        if (headObject == null || cellInstances.Count == 0 || controller == null)
+            return;
+
+        int localIndex = Mathf.Clamp(controller.posicionCabezal, 0, cellInstances.Count - 1);
+        Vector3 cellPos = cellInstances[localIndex].transform.position;
+        Vector3 offset = CalcularOffsetCabezal(localIndex);
+        headObject.position = cellPos + offset;
+        headTargetPos = headObject.position;
+    }
+
+    void UpdateHead()
+    {
+        if (headObject == null || cellInstances.Count == 0)
+            return;
+
+        int localIndex = Mathf.Clamp(controller.posicionCabezal, 0, cellInstances.Count - 1);
+        Vector3 cellPos = cellInstances[localIndex].transform.position;
+        Vector3 offset = CalcularOffsetCabezal(localIndex);
+        headTargetPos = cellPos + offset;
+
+        if (snapHeadToCell)
+        {
+            headObject.position = headTargetPos;
+        }
+        else
+        {
+            headObject.position = Vector3.Lerp(
+                headObject.position,
+                headTargetPos,
+                Time.deltaTime * headMoveSpeed
+            );
+        }
+    }
+
+    Vector3 CalcularOffsetCabezal(int cellIndex)
+    {
+        Vector3 upDir = Vector3.up;
+        if (usarNormalDeCelda && cellIndex >= 0 && cellIndex < cellInstances.Count)
+        {
+            var cell = cellInstances[cellIndex];
+            if (cell != null)
+                upDir = cell.transform.up;
         }
 
-        // Mover el cabezal encima de la celda actual
-        if (headObject != null)
-        {
-            int headLocalIndex = controller.posicionCabezal - offset;
-            if (headLocalIndex >= 0 && headLocalIndex < cellsToShow)
-            {
-                Vector3 cellPos = cellInstances[headLocalIndex].transform.position;
-                headObject.position = cellPos + new Vector3(0, 1f, 0);
-            }
-        }
+        Vector3 baseOffset = upDir.normalized * headHeight;
+        if (headOffset != Vector3.zero)
+            baseOffset += headOffset;
+
+        return baseOffset;
     }
 }
