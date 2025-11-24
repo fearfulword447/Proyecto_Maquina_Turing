@@ -399,7 +399,7 @@ MonoBehaviour:
   maxOperandValue: 9
   cintaSumaPorDefecto: 1101
   cintaRestaPorDefecto: 111011
-  longitudCintaLimpia: 21
+  longitudCintaLimpia: 22
 --- !u!4 &80998908
 Transform:
   m_ObjectHideFlags: 0
