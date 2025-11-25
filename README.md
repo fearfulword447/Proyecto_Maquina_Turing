@@ -3,7 +3,7 @@
 Este es el proyecto para el taller de la Máquina de Turing, implementado en Unity.
 
 - El script `TuringController.cs` (en la carpeta `Assets`) contiene toda la lógica de la máquina (la cinta, los estados y las reglas de transición).
-- El objetivo es que la parte visual (modelos 3D, luces) se conecte a este script para funcionar.
+- El objetivo es que la parte visual (modelos 3D, luces) se conecte a este script para funcionar de manera interactiva.
 
 ---
 
@@ -24,20 +24,44 @@ Para que el script funcione, Unity necesita poder leer el teclado con el sistema
 
 ---
 
-## Manual de Uso
+## Manual de Uso (Interfaz Gráfica)
 
-La máquina simula operaciones en sistema **Unario** (palitos).
-* **Formato de Entrada:** `111011` representa `3` (operación) `2`. El `0` actúa como separador.
-* **Símbolos:** `1` (Dato), `0` (Separador), `_` (Blanco/Vacío), `x` (Marca de proceso).
+La máquina cuenta con una interfaz visual completa que permite ingresar datos manualmente en la cinta y controlar la ejecución sin necesidad de código.
 
-### Controles
-* **Tecla `S`**: Carga la operación de **SUMA** (Ejemplo: 2 + 1).
-* **Tecla `R`**: Carga la operación de **RESTA** (Ejemplo: 3 - 2).
-* **Barra Espaciadora**: Ejecuta un **paso** de la máquina (Step). Mantener presionado para avanzar rápido.
+### Formato de Datos
+La máquina opera en sistema **Unario**.
+* **1 (Uno):** Representado por una casilla activa/verde.
+* **0 (Separador):** Representado por una casilla ploma/gris.
+* **Ejemplo:** Para realizar la operación `3 - 2`, la cinta debe configurarse visualmente como: `111` (separador) `11`.
+
+### Guía de Botones y Controles
+
+**1. Navegación y Edición de Cinta**
+* **Botones Izquierda / Derecha:** Mueven el selector a través de las casillas de la cinta para elegir dónde escribir.
+* **Botón "Colocar":** Es un botón multifunción para escribir en la cinta:
+    * **1 Clic:** Escribe un `1` (Marca la casilla como número/verde).
+    * **2 Clics:** Escribe un `0` (Marca la casilla como separador/plomo).
+    * *Nota:* Se pueden ingresar números del 1 al 9.
+
+**2. Selección de Operación**
+Una vez ingresados los datos en la cinta (Número A + Separador + Número B), se debe cargar la lógica deseada:
+* **Botón "Cargar Suma":** Prepara la máquina con las reglas para sumar A + B.
+* **Botón "Cargar Resta":** Prepara la máquina con las reglas para restar A - B.
+
+**3. Control de Ejecución**
+* **Botón "Play / Pause":** Inicia o pausa la ejecución automática de la máquina. Al darle Play, la máquina comenzará a leer la cinta y modificarla según la operación cargada.
+* **Botón "Limpiar":** Reinicia la máquina por completo, borrando la cinta y restableciendo el estado a Q0 para realizar una nueva operación.
+
+### Notas sobre Resultados
+* **Suma:** Une ambas cadenas de unos.
+* **Resta:** Si el primer número es mayor o igual al segundo, muestra el resultado correcto.
+* **Resultado Negativo:** El sistema no acepta números negativos. Si se intenta restar un número menor menos uno mayor (Ej: `2 - 3`), el resultado final será **0** (cinta vacía).
 
 ---
 
-## Tablas de Estados (Lógica)
+## Tablas de Estados (Lógica Interna)
+
+A continuación se detallan las reglas que sigue el "cerebro" de la máquina para cada operación una vez que se presiona Play.
 
 ### 1. Suma (A + B)
 **Algoritmo:** Une las dos cadenas de unos reemplazando el cero central con un uno y borrando un uno del final.
